@@ -1,0 +1,88 @@
+app = FastAPI(title="Voice Generation API")
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+
+class GenerateRequest(BaseModel):
+    text: str
+    voice: str = DEFAULT_VOICE  # Optional, default to fireship
+
+
+@app.get("/")
+async def root():
+    return {"message": "Voice Generation API", "status": "running"}
+
+
+@app.get("/health")
+async def health():
+    return {"status": "healthy"}
+
+
+@app.get("/getvoiceslist")
+async def get_voices_list():
+    """Get list of available voice names"""
+    voices = get_available_voices()
+    return {
+        "voices": voices,
+        "default": DEFAULT_VOICE,
+        "total": len(voices)
+    }
+
+
+@app.post("/generate")
+async def generate(request: GenerateRequest):
+    text = request.text.strip()
+    voice_name = request.voice.strip() if request.voice else DEFAULT_VOICE
+    
+    if not text:
+        raise HTTPException(status_code=400, detail="Text is required")
+    
+    # Get voice path
+    voice_path = get_voice_path(voice_name)
+    if not voice_path:
+        available = get_available_voices()
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Voice '{voice_name}' not found. Available voices: {available}"
+        )
+    
+    word_count = count_words(text)
+    chunks = split_text_into_chunks(text)
+    chunks_count = len(chunks)
+    
+    print(f"📝 API Request: {word_count} words, {chunks_count} chunks, voice: {voice_name}")
+    
+    try:
+        if chunks_count == 1:
+            wav = model.generate(text, audio_prompt_path=voice_path)
+        else:
+            audio_tensors = []
+            for i, chunk in enumerate(chunks):
+                print(f"  🎙️ Processing Chunk [{i+1}/{chunks_count}]")
+                chunk_wav = model.generate(chunk, audio_prompt_path=voice_path)
+                audio_tensors.append(chunk_wav)
+            wav = merge_audio_tensors(audio_tensors, model.sr)
+        
+        # Memory buffer - no disk storage needed
+        buffer = BytesIO()
+        ta.save(buffer, wav, model.sr, format="wav")
+        buffer.seek(0)
+        
+        return StreamingResponse(
+            buffer,
+            media_type="audio/wav",
+            headers={
+                "Content-Disposition": "attachment; filename=generated.wav",
+                "X-Word-Count": str(word_count),
+                "X-Chunks-Count": str(chunks_count),
+                "X-Voice-Used": voice_name
+            }
+        )
+    except Exception as e:
+        print(f"❌ Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+print("✅ FastAPI configured and ready to run")
+print(f"📂 Voice folder: {VOICE_FOLDER}")
+print(f"🎤 Available voices: {get_available_voices()}")
+print(f"🔊 Default voice: {DEFAULT_VOICE}")
