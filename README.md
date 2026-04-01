@@ -1,16 +1,15 @@
-# 🎙️ Pocket TTS API Server
+﻿# 🎙️ Voice Generation API
 
-Express.js API server for text-to-speech using [pocket-tts](https://github.com/umairzahid604/pocket-tts). The TTS model is pre-loaded into memory on server startup for fast generation (~600-800ms per request).
+Node.js API server for text-to-speech using [pocket-tts](https://github.com/umairzahid604/pocket-tts). Python FastAPI compatible endpoints with pre-loaded model for fast generation.
 
 ## ✨ Features
 
-- 🚀 **Fast** - Model loads once at startup, all generations are fast
+- 🚀 **Fast** - Model loads once at startup, all generations are fast (~600-800ms)
 - 🎭 **8 Built-in Voices** - alba, marius, javert, jean, fantine, cosette, eponine, azelma
-- � **Custom Voices** - Add your own voice files in `voices/` folder (automatically detected)
-- �🔊 **Audio Effects** - Adjust volume (0-2x) and playback speed (0.5-2x)
-- 📦 **Multiple Response Formats** - File download, Base64, or streaming
+- 📂 **Custom Voices** - Add your own WAV files in `voices/` folder (auto-detected)
+- 🐍 **Python Compatible** - Same API structure as Python FastAPI server
 - 🔄 **Auto Cleanup** - Temporary files are automatically cleaned
-- 💚 **Health Checks** - Monitor server and model status
+- 💚 **Health Checks** - Monitor server status
 
 ## 📋 Requirements
 
@@ -20,25 +19,20 @@ Express.js API server for text-to-speech using [pocket-tts](https://github.com/u
 
 ## 🚀 Installation
 
-1. **Clone the repository:**
-   ```bash
-   cd pocket-tts-api
-   ```
-
-2. **Install dependencies:**
+1. **Install dependencies:**
    ```bash
    npm install
    ```
    *Note: Python package `pocket-tts` will be installed automatically during npm install.*
 
-3. **Create environment file:**
+2. **Create environment file:**
    ```bash
    copy .env.example .env
    ```
 
-4. **Edit `.env` file if needed:**
+3. **Configure port (optional):**
    ```env
-   PORT=3000
+   PORT=8547
    ```
 
 ## ▶️ Running the Server
@@ -55,33 +49,60 @@ npm start
 
 The server will:
 1. Load the TTS model into memory (~12 seconds on first load)
-2. Start the Express server
-3. Display available endpoints
+2. Start listening on port 8547
+3. Display available voices
 
 ## 📡 API Endpoints
 
-### Python API Compatible Endpoints
+### 1. Root Endpoint
+**GET** `/`
 
-Yeh endpoints Python FastAPI server ke bilkul same hain - existing clients ke liye backward compatibility.
-
-#### 1. Get Voices List (Python Compatible)
-**GET** `/getvoiceslist`
-
-Get list of all available voices.
+Get API information.
 
 **Response:**
 ```json
 {
-  "voices": ["alba", "marius", "javert", "jean", "fantine", "cosette", "eponine", "azelma", "custom1"],
+  "message": "Voice Generation API",
+  "status": "running"
+}
+```
+
+---
+
+### 2. Health Check
+**GET** `/health`
+
+Check server health.
+
+**Response:**
+```json
+{
+  "status": "healthy"
+}
+```
+
+---
+
+### 3. Get Voices List
+**GET** `/getvoiceslist`
+
+Get list of all available voices (built-in + custom).
+
+**Response:**
+```json
+{
+  "voices": ["alba", "marius", "javert", "jean", "fantine", "cosette", "eponine", "azelma", "myvoice"],
   "default": "alba",
   "total": 9
 }
 ```
 
-#### 2. Generate TTS (Python Compatible)
+---
+
+### 4. Generate TTS
 **POST** `/generate`
 
-Generate TTS audio file.
+Generate text-to-speech audio file.
 
 **Request Body:**
 ```json
@@ -91,115 +112,27 @@ Generate TTS audio file.
 }
 ```
 
-**Response:**
-- Returns WAV audio file directly
-- Headers include:
-  - `X-Word-Count`: Number of words in text
-  - `X-Voice-Used`: Voice name used
-  - `Content-Type`: audio/wav
-
----
-
-### REST API Endpoints
-
-### 1. Health Check
-**GET** `/health`
-
-Check if server and TTS model are ready.
-
-**Response:**
-```json
-{
-  "success": true,
-  "status": "running",
-  "ttsReady": true,
-  "timestamp": "2026-04-01T12:00:00.000Z"
-}
-```
-
----
-
-### 2. Get Available Voices (REST)
-**GET** `/api/tts/voices`
-
-Get list of available built-in and custom voices with detailed info.
-
-**Response:**
-```json
-{
-  "success": true,
-  "voices": ["alba", "marius", "javert", "jean", "fantine", "cosette", "eponine", "azelma", "custom1"],
-  "count": 9,
-  "builtin": ["alba", "marius", "javert", "jean", "fantine", "cosette", "eponine", "azelma"],
-  "custom": ["custom1"]
-}
-```
-
----
-
-### 3. Generate TTS (REST - File or Base64)
-**POST** `/api/tts/generate`
-
-Generate text-to-speech audio.
-
-**Request Body:**
-```json
-{
-  "text": "Hello world!",
-  "voice": "alba",
-  "volume": 1.0,
-  "playbackSpeed": 1.0,
-  "format": "file"
-}
-```
-
 **Parameters:**
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | text | string | ✅ Yes | - | Text to convert to speech |
-| voice | string | ❌ No | "alba" | Voice name or path to audio file for cloning |
-| volume | number | ❌ No | 1.0 | Volume level (0.0 - 2.0) |
-| playbackSpeed | number | ❌ No | 1.0 | Playback speed (0.5 - 2.0) |
-| format | string | ❌ No | "file" | Response format: "file" or "base64" |
-
-**Response (format: "file"):**
-- Returns WAV audio file for download
-
-**Response (format: "base64"):**
-```json
-{
-  "success": true,
-  "audio": "UklGRiQAAABXQVZFZm10...",
-  "mimeType": "audio/wav",
-  "generationTimeMs": 650,
-  "metadata": {
-    "text": "Hello world!",
-    "voice": "alba",
-    "volume": 1.0,
-    "playbackSpeed": 1.0
-  }
-}
-```
-
----
-
-### 4. Generate TTS (Streaming)
-**POST** `/api/tts/generate-stream`
-
-Generate and stream TTS audio directly.
-
-**Request Body:**
-```json
-{
-  "text": "Hello world!",
-  "voice": "alba",
-  "volume": 1.0,
-  "playbackSpeed": 1.0
-}
-```
+| voice | string | ❌ No | "alba" | Voice name from available voices |
 
 **Response:**
-- Streams WAV audio file with `Content-Type: audio/wav`
+- Returns WAV audio file directly
+- **Headers:**
+  - `Content-Type`: audio/wav
+  - `Content-Disposition`: attachment; filename=generated.wav
+  - `X-Word-Count`: Number of words in text
+  - `X-Chunks-Count`: Number of chunks processed
+  - `X-Voice-Used`: Voice name used
+
+**Error Response:**
+```json
+{
+  "detail": "Text is required"
+}
+```
 
 ---
 
@@ -209,51 +142,47 @@ Generate and stream TTS audio directly.
 
 **Basic TTS generation:**
 ```bash
-curl -X POST http://localhost:3000/api/tts/generate \
+curl -X POST http://localhost:8547/generate \
   -H "Content-Type: application/json" \
   -d "{\"text\": \"Hello, this is a test!\"}" \
   --output output.wav
 ```
 
-**With voice and effects:**
+**With specific voice:**
 ```bash
-curl -X POST http://localhost:3000/api/tts/generate \
+curl -X POST http://localhost:8547/generate \
   -H "Content-Type: application/json" \
-  -d "{\"text\": \"Hello world!\", \"voice\": \"marius\", \"volume\": 1.5, \"playbackSpeed\": 1.2}" \
+  -d "{\"text\": \"Hello world!\", \"voice\": \"marius\"}" \
   --output output.wav
 ```
 
-**Get Base64 audio:**
+**Get voices list:**
 ```bash
-curl -X POST http://localhost:3000/api/tts/generate \
-  -H "Content-Type: application/json" \
-  -d "{\"text\": \"Hello!\", \"format\": \"base64\"}"
+curl http://localhost:8547/getvoiceslist
 ```
 
-### Using JavaScript (Fetch)
+### Using JavaScript (Node.js)
 
 ```javascript
+const fs = require('fs');
+
 async function generateTTS() {
-  const response = await fetch('http://localhost:3000/api/tts/generate', {
+  const response = await fetch('http://localhost:8547/generate', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
       text: 'Hello from JavaScript!',
-      voice: 'alba',
-      volume: 1.2,
-      playbackSpeed: 1.0,
-      format: 'base64'
+      voice: 'alba'
     })
   });
 
-  const data = await response.json();
-  
-  if (data.success) {
-    // Play audio from base64
-    const audio = new Audio(`data:${data.mimeType};base64,${data.audio}`);
-    audio.play();
+  if (response.ok) {
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    fs.writeFileSync('output.wav', buffer);
+    console.log('Audio saved to output.wav');
   }
 }
 
@@ -265,25 +194,35 @@ generateTTS();
 ```python
 import requests
 
-url = "http://localhost:3000/api/tts/generate"
+url = "http://localhost:8547/generate"
 payload = {
     "text": "Hello from Python!",
-    "voice": "alba",
-    "volume": 1.0,
-    "playbackSpeed": 1.0
+    "voice": "alba"
 }
 
 response = requests.post(url, json=payload)
 
-# Save audio file
-with open("output.wav", "wb") as f:
-    f.write(response.content)
+if response.status_code == 200:
+    with open("output.wav", "wb") as f:
+        f.write(response.content)
+    print("Audio saved to output.wav")
+else:
+    print("Error:", response.json())
 ```
+
+### Test Script
+
+Run the included test script:
+```bash
+node test-generate-save.js
+```
+
+This will generate and save `test-output.wav`.
 
 ## 🎭 Available Voices
 
 ### Built-in Voices:
-- **alba** - Default voice
+- **alba** (default)
 - **marius**
 - **javert**
 - **jean**
@@ -293,106 +232,98 @@ with open("output.wav", "wb") as f:
 - **azelma**
 
 ### Custom Voices:
-Aap apni custom voice files `voices/` folder mein rakh sakte hain. Server automatically un voices ko detect kar lega.
 
-**How to add custom voices:**
-1. Apni WAV file ko `voices/` folder mein copy karein
-2. File ka name (without `.wav` extension) as voice parameter use karein
+Add your own voice files to the `voices/` folder. The server will automatically detect them.
 
-**Example:**
-```bash
-# Step 1: Copy your voice file
-cp myvoice.wav voices/
+**How to add:**
 
-# Step 2: Use it in API
-curl -X POST http://localhost:3000/api/tts/generate \
-  -H "Content-Type: application/json" \
-  -d '{"text": "Hello!", "voice": "myvoice"}' \
-  --output output.wav
-```
+1. Copy your WAV file to `voices/` folder:
+   ```bash
+   copy myvoice.wav voices\
+   ```
 
-**Check all available voices:**
-```bash
-curl http://localhost:3000/api/tts/voices
-```
+2. Use the voice name (without extension):
+   ```bash
+   curl -X POST http://localhost:8547/generate \
+     -H "Content-Type: application/json" \
+     -d "{\"text\": \"Hello!\", \"voice\": \"myvoice\"}" \
+     --output output.wav
+   ```
 
-Response will include both built-in and custom voices:
-```json
-{
-  "success": true,
-  "voices": ["alba", "marius", "javert", "jean", "fantine", "cosette", "eponine", "azelma", "myvoice"],
-  "count": 9,
-  "builtin": ["alba", "marius", "javert", "jean", "fantine", "cosette", "eponine", "azelma"],
-  "custom": ["myvoice"]
-}
-```
+3. Verify it's available:
+   ```bash
+   curl http://localhost:8547/getvoiceslist
+   ```
 
-## 🔧 Voice Cloning
-
-To use voice cloning, you need to:
-
-1. Accept terms at: https://huggingface.co/kyutai/pocket-tts
-2. Login with: `uvx hf auth login`
-
-Then use a path to your audio file (5-30 seconds WAV) as the voice parameter:
-
-```json
-{
-  "text": "This is my cloned voice!",
-  "voice": "./path/to/voice-sample.wav"
-}
-```
+**Requirements for custom voices:**
+- Format: WAV only
+- Duration: 5-30 seconds recommended for voice cloning
+- No special characters in filename
 
 ## ⚙️ Configuration
 
-Edit the `.env` file to change settings:
+Edit `.env` file:
 
 ```env
 # Server port
-PORT=3000
+PORT=8547
 ```
 
 ## 🛠️ Error Handling
 
-The API returns detailed error messages:
-
-**Example error response:**
+**Error Response Format:**
 ```json
 {
-  "success": false,
-  "error": "Text is required and must be a non-empty string"
+  "detail": "Error message here"
 }
 ```
 
-**Common errors:**
-| Error Code | Description |
-|------------|-------------|
-| 400 | Bad request (invalid parameters) |
-| 503 | TTS model is still loading |
-| 500 | Server error during generation |
+**Common Errors:**
+
+| Status | Error | Cause |
+|--------|-------|-------|
+| 400 | Text is required | Empty or missing text field |
+| 400 | Voice 'X' not found | Invalid voice name |
+| 500 | Internal server error | Server or model error |
 
 ## 🧹 Automatic Cleanup
 
-- Temporary audio files are automatically deleted after being sent
-- Files older than 5 minutes are cleaned up automatically
-- All temp files are cleaned on server shutdown
+- Temporary audio files deleted after sending
+- Files older than 5 minutes auto-cleaned
+- Cleanup on server shutdown
 
 ## 📊 Performance
 
-- **First generation**: ~12 seconds (includes model loading)
-- **Subsequent generations**: ~600-800ms
-- **Model**: 100M parameter model optimized for CPU
+- **First generation**: ~12 seconds (includes model loading on startup)
+- **Subsequent generations**: ~600-800ms per request
+- **Model**: 100M parameter Pocket-TTS optimized for CPU
 
-## 🔌 Graceful Shutdown
+## 🔌 Server Startup
 
-The server handles graceful shutdown on:
-- `CTRL+C` (SIGINT)
-- `SIGTERM`
+Startup output:
+```
+✅ FastAPI configured and ready to run
+📂 Voice folder: D:\pocket-tts-api\voices
+🎤 Available voices: alba, marius, javert, jean, fantine, cosette, eponine, azelma
+🔊 Default voice: alba
 
-This ensures:
-- Cleanup of temporary files
-- Proper closure of TTS instance
-- No orphaned processes
+================================================
+🚀 Voice Generation API Server
+📡 Server: http://localhost:8547
+================================================
+   GET  /
+   GET  /health
+   GET  /getvoiceslist
+   POST /generate
+================================================
+```
+
+## 🛑 Graceful Shutdown
+
+Press `CTRL+C` to stop the server. It will:
+- Clean up temporary files
+- Close TTS model properly
+- Exit gracefully
 
 ## 📝 License
 
@@ -402,14 +333,3 @@ MIT
 
 - [Kyutai Labs](https://kyutai.org/) - Pocket-TTS model
 - [pocket-tts](https://github.com/umairzahid604/pocket-tts) - Original implementation
-
-## 🆘 Support
-
-If you encounter issues:
-
-1. Check Python version: `python --version` (should be 3.10-3.14)
-2. Check Node version: `node --version` (should be >= 18.0.0)
-3. Ensure FFmpeg is installed
-4. Check server logs for detailed error messages
-
-For voice cloning issues, ensure you've accepted HuggingFace terms and logged in via `uvx hf auth login`.
