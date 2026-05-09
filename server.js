@@ -1,8 +1,10 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
+const { spawn } = require('child_process');
 const { getSharedTTS, closeSharedTTS } = require('pocket-tts');
 
 const app = express();
@@ -33,6 +35,25 @@ const DEFAULT_VOICE = 'alba';
 
 // Built-in voices list
 const BUILTIN_VOICES = ['alba', 'marius', 'javert', 'jean', 'fantine', 'cosette', 'eponine', 'azelma'];
+
+const uploadVoiceFiles = multer({
+    storage: multer.diskStorage({
+        destination: (req, file, callback) => {
+            callback(null, TEMP_DIR);
+        },
+        filename: (req, file, callback) => {
+            const extension = path.extname(file.originalname) || '';
+            callback(null, `upload_${Date.now()}_${Math.round(Math.random() * 1e9)}${extension}`);
+        }
+    }),
+    limits: {
+        fileSize: 50 * 1024 * 1024
+    }
+}).fields([
+    { name: 'file', maxCount: 1 },
+    { name: 'audio', maxCount: 1 },
+    { name: 'voiceFile', maxCount: 1 }
+]);
 
 /**
  * Get list of available voice names (without extension)
@@ -85,6 +106,74 @@ function get_voice_path(voice_name) {
  */
 function count_words(text) {
     return text.trim().split(/\s+/).filter(w => w.length > 0).length;
+}
+
+/**
+ * Make uploaded voice names safe for the filesystem and API use
+ */
+function sanitize_voice_name(voice_name) {
+    return (voice_name || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+}
+
+/**
+ * Remove a file if it exists
+ */
+function remove_file_if_exists(file_path) {
+    if (file_path && fs.existsSync(file_path)) {
+        fs.unlinkSync(file_path);
+    }
+}
+
+/**
+ * Convert an uploaded audio file to WAV using FFmpeg
+ */
+function convert_audio_to_wav(input_path, output_path) {
+    return new Promise((resolve, reject) => {
+        const ffmpeg = spawn('ffmpeg', [
+            '-y',
+            '-loglevel', 'error',
+            '-i', input_path,
+            '-vn',
+            '-acodec', 'pcm_s16le',
+            output_path
+        ], {
+            windowsHide: true
+        });
+
+        let stderr = '';
+
+        ffmpeg.stderr.on('data', chunk => {
+            stderr += chunk.toString();
+        });
+
+        ffmpeg.on('error', error => {
+            reject(error);
+        });
+
+        ffmpeg.on('close', code => {
+            if (code === 0) {
+                resolve();
+                return;
+            }
+
+            reject(new Error(stderr.trim() || `FFmpeg exited with code ${code}`));
+        });
+    });
+}
+
+/**
+ * Get the uploaded audio file from supported multipart field names
+ */
+function get_uploaded_voice_file(files) {
+    if (!files) {
+        return null;
+    }
+
+    return files.file?.[0] || files.audio?.[0] || files.voiceFile?.[0] || null;
 }
 
 /**
@@ -156,6 +245,83 @@ app.get('/getvoiceslist', (req, res) => {
         voices: voices,
         default: DEFAULT_VOICE,
         total: voices.length
+    });
+});
+
+/**
+ * Upload a custom voice and convert it to WAV
+ */
+app.post('/uploadvoice', (req, res) => {
+    uploadVoiceFiles(req, res, async upload_error => {
+        let temp_input_path = null;
+        let output_path = null;
+
+        try {
+            if (upload_error) {
+                const detail = upload_error.code === 'LIMIT_FILE_SIZE'
+                    ? 'Uploaded file is too large. Maximum size is 50MB.'
+                    : upload_error.message;
+
+                return res.status(400).json({ detail });
+            }
+
+            const uploaded_file = get_uploaded_voice_file(req.files);
+            if (!uploaded_file) {
+                return res.status(400).json({
+                    detail: 'Audio file is required. Use multipart/form-data with field "file", "audio", or "voiceFile".'
+                });
+            }
+
+            temp_input_path = uploaded_file.path;
+
+            const requested_name = req.body.name || req.body.voice_name || req.body.voiceName || path.parse(uploaded_file.originalname).name;
+            const voice_name = sanitize_voice_name(requested_name);
+
+            if (!voice_name) {
+                return res.status(400).json({
+                    detail: 'Voice name is required and must contain letters, numbers, dashes, or underscores.'
+                });
+            }
+
+            if (BUILTIN_VOICES.includes(voice_name)) {
+                return res.status(400).json({
+                    detail: `Voice name '${voice_name}' is reserved for a built-in voice.`
+                });
+            }
+
+            output_path = path.join(VOICE_FOLDER, `${voice_name}.wav`);
+
+            if (fs.existsSync(output_path)) {
+                return res.status(409).json({
+                    detail: `Voice '${voice_name}' already exists.`
+                });
+            }
+
+            await convert_audio_to_wav(temp_input_path, output_path);
+
+            console.log(`✅ Voice uploaded: ${voice_name}`);
+
+            return res.status(201).json({
+                detail: 'Voice uploaded successfully',
+                voice: voice_name,
+                filename: `${voice_name}.wav`,
+                total: get_available_voices().length
+            });
+        } catch (error) {
+            console.error(`❌ Upload error: ${error.message}`);
+
+            if (output_path) {
+                remove_file_if_exists(output_path);
+            }
+
+            return res.status(500).json({
+                detail: error.message || 'Failed to upload voice'
+            });
+        } finally {
+            if (temp_input_path) {
+                remove_file_if_exists(temp_input_path);
+            }
+        }
     });
 });
 
@@ -267,6 +433,7 @@ async function startServer() {
             console.log(`   GET  /`);
             console.log(`   GET  /health`);
             console.log(`   GET  /getvoiceslist`);
+            console.log(`   POST /uploadvoice`);
             console.log(`   POST /generate`);
             console.log('================================================');
         });

@@ -136,6 +136,35 @@ Generate text-to-speech audio file.
 
 ---
 
+### 5. Upload Voice
+**POST** `/uploadvoice`
+
+Upload a custom voice sample and convert it to WAV automatically.
+
+**Request Body:**
+- `multipart/form-data`
+- File field: `file`, `audio`, or `voiceFile`
+- Optional text field: `name` (or `voice_name`) to choose the saved voice name
+
+**Response:**
+```json
+{
+  "detail": "Voice uploaded successfully",
+  "voice": "myvoice",
+  "filename": "myvoice.wav",
+  "total": 12
+}
+```
+
+**Error Responses:**
+```json
+{
+  "detail": "Voice 'myvoice' already exists."
+}
+```
+
+---
+
 ## 🧪 Example Usage
 
 ### Using cURL
@@ -159,6 +188,13 @@ curl -X POST http://localhost:8547/generate \
 **Get voices list:**
 ```bash
 curl http://localhost:8547/getvoiceslist
+```
+
+**Upload a custom voice:**
+```bash
+curl -X POST http://localhost:8547/uploadvoice \
+  -F "name=myvoice" \
+  -F "file=@sample.mp3"
 ```
 
 ### Using JavaScript (Node.js)
@@ -233,16 +269,23 @@ This will generate and save `test-output.wav`.
 
 ### Custom Voices:
 
-Add your own voice files to the `voices/` folder. The server will automatically detect them.
+Add your own voice files to the `voices/` folder manually, or upload them through the API. The server will automatically detect them.
 
 **How to add:**
 
-1. Copy your WAV file to `voices/` folder:
+1. Upload any FFmpeg-supported audio file and let the API convert it to WAV:
+  ```bash
+  curl -X POST http://localhost:8547/uploadvoice \
+    -F "name=myvoice" \
+    -F "file=@sample.m4a"
+  ```
+
+2. Or copy a WAV file directly to `voices/` folder:
    ```bash
    copy myvoice.wav voices\
    ```
 
-2. Use the voice name (without extension):
+3. Use the voice name (without extension):
    ```bash
    curl -X POST http://localhost:8547/generate \
      -H "Content-Type: application/json" \
@@ -250,13 +293,14 @@ Add your own voice files to the `voices/` folder. The server will automatically 
      --output output.wav
    ```
 
-3. Verify it's available:
+4. Verify it's available:
    ```bash
    curl http://localhost:8547/getvoiceslist
    ```
 
 **Requirements for custom voices:**
-- Format: WAV only
+- Stored format: WAV
+- Upload input: Any FFmpeg-supported audio format
 - Duration: 5-30 seconds recommended for voice cloning
 - No special characters in filename
 
@@ -284,6 +328,8 @@ PORT=8547
 |--------|-------|-------|
 | 400 | Text is required | Empty or missing text field |
 | 400 | Voice 'X' not found | Invalid voice name |
+| 400 | Audio file is required | Missing multipart upload file |
+| 409 | Voice 'X' already exists | Custom voice filename already exists |
 | 500 | Internal server error | Server or model error |
 
 ## 🧹 Automatic Cleanup
@@ -314,6 +360,7 @@ Startup output:
    GET  /
    GET  /health
    GET  /getvoiceslist
+  POST /uploadvoice
    POST /generate
 ================================================
 ```
